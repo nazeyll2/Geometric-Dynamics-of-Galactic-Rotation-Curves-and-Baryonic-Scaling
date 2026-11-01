@@ -1,0 +1,200 @@
+import sympy as sp
+
+t, R, phi, z = sp.symbols('t R phi z', real=True)
+
+N = sp.Function('N')(R, z)
+A = sp.Function('A')(R, z)
+B = sp.Function('B')(R, z)
+C = sp.Function('C')(R, z)
+omega = sp.Function('omega')(R, z)
+W_R = sp.Function('W_R')(R, z)
+W_z = sp.Function('W_z')(R, z)
+
+coords = sp.Matrix([t, R, phi, z])
+
+eta = sp.diag(-1, 1, 1, 1)
+eta_inv = eta.inv()
+
+e = sp.Matrix([
+    [N,          0,     0,   0],
+    [W_R,        A,     0,   0],
+    [-R*B*omega, 0,   R*B,   0],
+    [W_z,        0,     0,   C]
+])
+
+e_inv = sp.simplify(e.inv())
+
+g = sp.simplify(e.T * eta * e)
+g_inv = sp.simplify(g.inv())
+
+det_e = sp.factor(e.det())
+det_g = sp.factor(g.det())
+
+identity_tetrad = sp.simplify(e * e_inv)
+identity_coordinate = sp.simplify(e_inv * e)
+
+check_metric_inverse = sp.simplify(g * g_inv)
+check_determinants = sp.simplify(det_g + det_e**2)
+
+spin_conn = sp.MutableDenseNDimArray.zeros(4, 4, 4)
+
+spin_conn[1, 2, 2] = -1
+spin_conn[2, 1, 2] = 1
+
+T_frame = sp.MutableDenseNDimArray.zeros(4, 4, 4)
+
+for a_idx in range(4):
+    for mu in range(4):
+        for nu in range(4):
+            expr = (
+                sp.diff(e[a_idx, nu], coords[mu])
+                - sp.diff(e[a_idx, mu], coords[nu])
+            )
+
+            expr += sum(
+                spin_conn[a_idx, b_idx, mu] * e[b_idx, nu]
+                - spin_conn[a_idx, b_idx, nu] * e[b_idx, mu]
+                for b_idx in range(4)
+            )
+
+            T_frame[a_idx, mu, nu] = sp.simplify(expr)
+
+T = sp.MutableDenseNDimArray.zeros(4, 4, 4)
+
+for rho in range(4):
+    for mu in range(4):
+        for nu in range(4):
+            T[rho, mu, nu] = sp.simplify(
+                sum(
+                    e_inv[rho, a_idx] * T_frame[a_idx, mu, nu]
+                    for a_idx in range(4)
+                )
+            )
+
+T_frame_nonzero = {
+    (a_idx, mu, nu): sp.factor(T_frame[a_idx, mu, nu])
+    for a_idx in range(4)
+    for mu in range(4)
+    for nu in range(mu + 1, 4)
+    if sp.simplify(T_frame[a_idx, mu, nu]) != 0
+}
+
+T_nonzero = {
+    (rho, mu, nu): sp.factor(T[rho, mu, nu])
+    for rho in range(4)
+    for mu in range(4)
+    for nu in range(mu + 1, 4)
+    if sp.simplify(T[rho, mu, nu]) != 0
+}
+V_cov = sp.MutableDenseNDimArray.zeros(4)
+
+for mu in range(4):
+    V_cov[mu] = sp.factor(
+        sp.simplify(
+            sum(T[rho, rho, mu] for rho in range(4))
+        )
+    )
+
+for mu in range(4):
+    print(f"({mu}) =", V_cov[mu])
+V_frame = sp.MutableDenseNDimArray.zeros(4)
+
+for a_idx in range(4):
+    V_frame[a_idx] = sp.factor(
+        sp.simplify(
+            sum(e_inv[mu, a_idx] * V_cov[mu] for mu in range(4))
+        )
+    )
+
+for a_idx in range(4):
+    print(f"({a_idx}) =", V_frame[a_idx])
+
+beta, kappa = sp.symbols('beta kappa', real=True)
+
+V_cov = sp.MutableDenseNDimArray.zeros(4)
+
+for mu in range(4):
+    V_cov[mu] = sp.simplify(
+        sum(T[rho, rho, mu] for rho in range(4))
+    )
+
+V_frame = sp.MutableDenseNDimArray.zeros(4)
+
+for a_idx in range(4):
+    V_frame[a_idx] = sp.simplify(
+        sum(
+            e_inv[mu, a_idx] * V_cov[mu]
+            for mu in range(4)
+        )
+    )
+
+V2 = sp.simplify(
+    sum(
+        eta_inv[a_idx, b_idx]
+        * V_frame[a_idx]
+        * V_frame[b_idx]
+        for a_idx in range(4)
+        for b_idx in range(4)
+    )
+)
+
+T_abc = sp.MutableDenseNDimArray.zeros(4, 4, 4)
+
+for a_idx in range(4):
+    for b_idx in range(4):
+        for c_idx in range(4):
+            T_abc[a_idx, b_idx, c_idx] = sp.simplify(
+                sum(
+                    e_inv[mu, b_idx]
+                    * e_inv[nu, c_idx]
+                    * T_frame[a_idx, mu, nu]
+                    for mu in range(4)
+                    for nu in range(4)
+                )
+            )
+
+T1 = 0
+
+for a_idx in range(4):
+    for b_idx in range(4):
+        for c_idx in range(4):
+            for d_idx in range(4):
+                for e_idx in range(4):
+                    for f_idx in range(4):
+                        T1 += (
+                            T_abc[a_idx, b_idx, c_idx]
+                            * eta[a_idx, d_idx]
+                            * eta_inv[b_idx, e_idx]
+                            * eta_inv[c_idx, f_idx]
+                            * T_abc[d_idx, e_idx, f_idx]
+                        )
+
+T1 = sp.simplify(T1)
+
+T2 = 0
+
+for a_idx in range(4):
+    for b_idx in range(4):
+        for c_idx in range(4):
+            for d_idx in range(4):
+                T2 += (
+                    T_abc[a_idx, b_idx, c_idx]
+                    * eta_inv[b_idx, d_idx]
+                    * T_abc[c_idx, d_idx, a_idx]
+                )
+
+T2 = sp.simplify(T2)
+
+T_scalar = sp.simplify(
+    sp.Rational(1, 4) * T1
+    + sp.Rational(1, 2) * T2
+    - V2
+)
+
+L_scalar = sp.simplify(
+    T_scalar + beta * V2
+)
+
+L_grav = sp.simplify(
+    det_e * L_scalar / (2 * kappa)
+)
