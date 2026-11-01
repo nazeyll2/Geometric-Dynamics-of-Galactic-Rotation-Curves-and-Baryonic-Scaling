@@ -1,0 +1,2 @@
+# Geometric-Dynamics-of-Galactic-Rotation-Curves-and-Baryonic-Scaling
+In this repository, we provide Python implementations for Geometric Dynamics of Galactic Rotation Curves and Baryonic Scaling, including symbolic computation of teleparallel geometric quantities, derivation and verification of field equations, numerical rotation-curve modeling, and reproducible analysis and visualization of SPARC galaxy data.
